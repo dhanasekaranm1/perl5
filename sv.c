@@ -3780,24 +3780,125 @@ Perl_sv_utf8_decode(pTHX_ SV *const sv)
 {
     PERL_ARGS_ASSERT_SV_UTF8_DECODE;
 
+    return sv_utf8_decode_flags(sv, 0);
+}
+
+/*
+=for apidoc sv_utf8_decode_flags
+
+If the PV of the SV is an octet sequence in UTF-8, as restricted by C<flags>,
+and contains a multiple-byte character, the C<SvUTF8> flag is turned on
+so that it looks like a character.  If the PV contains only single-byte
+characters, the C<SvUTF8> flag stays off.
+Scans PV for validity and returns FALSE if the PV is invalid UTF-8 or contains
+code points restricted by C<flags>.
+
+C<flags> may be 0 or any combination of the C<UTF8_DISALLOW_I<foo>> flags
+accepted by C<L</utf8n_to_uvchr>>.
+If C<flags> is 0, then there are no restrictions imposed on the code points.
+If C<flags> is C<UTF8_DISALLOW_ILLEGAL_INTERCHANGE>, the PV may contain only
+Unicode code points that aren't surrogates nor non-character code points.
+If C<flags> is C<UTF8_DISALLOW_ILLEGAL_C9_INTERCHANGE>, the PV may contain only
+Unicode code points that aren't surrogates.
+See C<L</utf8n_to_uvchr>> for the other possibilities.
+
+If C<flags> contains non-C<UTF8_DISALLOW_I<foo>> flags, they will be ignored
+except in C<-DEBUGGING> builds, where they will cause perl to die with an
+assertion failure.
+
+=cut
+*/
+
+
+bool
+Perl_sv_utf8_decode_flags(pTHX_ SV *const sv, const U32 flags)
+{
+    PERL_ARGS_ASSERT_SV_UTF8_DECODE_FLAGS;
+
     if (SvPOKp(sv)) {
-        const U8 *start, *c;
+        const U8 *start, *c, *error_ptr;
+        U32 sub_flags;
+        U8 * sanitized_copy = NULL;
+        U8 * sanitized_cur_end = NULL;
+        STRLEN sanitized_allocd = 0;;
 
 	/* The octets may have got themselves encoded - get them back as
 	 * bytes
 	 */
-	if (!sv_utf8_downgrade(sv, TRUE))
+	if (!sv_utf8_downgrade(sv, TRUE /* don't croak */))
 	    return FALSE;
 
         /* it is actually just a matter of turning the utf8 flag on, but
          * we want to make sure everything inside is valid utf8 first.
          */
         c = start = (const U8 *) SvPVX_const(sv);
-	if (!is_utf8_string(c, SvCUR(sv)))
-	    return FALSE;
-        if (! is_utf8_invariant_string(c, SvCUR(sv))) {
+
+        /* chansen: it would be nice if the Perl API provided a routine similar
+         * to sv_decode_utf8 for UTF-8 (preferably with better error reporting
+         * and perhaps with optional replacement of ill-formed sequences)
+         */
+
+        sub_flags = flags & (UTF8_DISALLOW_ILLEGAL_INTERCHANGE
+                            |UTF8_DISALLOW_ABOVE_31_BIT
+                            |UTF8_WARN_ILLEGAL_INTERCHANGE
+                            |UTF8_WARN_ABOVE_31_BIT);
+
+	while (!is_utf8_string_loc_flags(c, SvCUR(sv), &error_ptr, sub_flags)) {
+            const STRLEN replacement_len = sizeof(REPLACEMENT_CHARACTER_UTF8) - 1;
+            STRLEN retlen = 0;
+
+            if (flags & (SV_UTF8_DECODE_SANITIZE|SV_UTF8_DECODE_WARN)) {
+
+                if (flags & SV_UTF8_DECODE_WARN) {
+                    /* Turn on warnings */
+                    if (sub_flags & UTF8_DISALLOW_SURROGATE) {
+                        sub_flags |= UTF8_WARN_SURROGATE;
+                    }
+                    if (sub_flags & UTF8_DISALLOW_NONCHAR) {
+                        sub_flags |= UTF8_WARN_NONCHAR;
+                    }
+                    if (sub_flags & UTF8_DISALLOW_SUPER) {
+                        sub_flags |= UTF8_WARN_SUPER;
+                    }
+                    if (sub_flags & UTF8_DISALLOW_ABOVE_31_BIT) {
+                        sub_flags |= UTF8_WARN_ABOVE_31_BIT;
+                    }
+                }
+
+                (void) utf8n_to_uvchr(error_ptr, SvCUR(sv), &retlen, sub_flags);
+
+                if (flags & SV_UTF8_DECODE_WARN) {
+                    /* Turn off warnings if turned them on*/
+                }
+            }
+
+            if (! (flags & SV_UTF8_DECODE_SANITIZE)) {   
+                return FALSE;
+            }
+
+            if (! sanitized_copy) {
+                sanitized_allocd = SvCUR(sv) + replacement_len - retlen;
+                Newx(sanitized_copy, sanitized_allocd, U8);
+            }
+            else {
+                sanitized_allocd += replacement_len - retlen;
+                Renew(sanitized_copy, sanitized_allocd, U8);
+            }
+
+            Copy(REPLACEMENT_CHARACTER_UTF8, sanitized_cur_end, replacement_len, U8);
+            sanitized_cur_end += replacement_len;
+
+            c =  error_ptr + retlen;
+        }
+
+        if (sanitized_copy) {
+            sv_usepvn(sv, (char *) sanitized_copy, sanitized_cur_end - sanitized_copy);
+            SvUTF8_on(sv);
+        }   /* The REPLACEMENT CHAR makes it not invariant, so don't have to test */
+        else if (! is_utf8_invariant_string(c, SvCUR(sv))) {
             SvUTF8_on(sv);
         }
+
 	if (SvTYPE(sv) >= SVt_PVMG && SvMAGIC(sv)) {
 	    /* XXX Is this dead code?  XS_utf8_decode calls SvSETMAGIC
 		   after this, clearing pos.  Does anything on CPAN

@@ -1972,6 +1972,10 @@ Like C<sv_utf8_upgrade>, but doesn't do magic on C<sv>.
 	: sv_len_utf8(sv))
 #endif
 
+#define sv_utf8_decode(sv) sv_utf8_decode_flags(sv, 0)
+#define SV_UTF8_DECODE_SANITIZE  UTF8_ALLOW_EMPTY
+#define SV_UTF8_DECODE_WARN      UTF8_ALLOW_CONTINUATION
+
 /*
 =for apidoc Am|SV*|newRV_inc|SV* sv
 
