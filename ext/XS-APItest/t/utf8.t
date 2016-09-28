@@ -990,7 +990,7 @@ my @malformations = (
         $UTF8_ALLOW_LONG,
         0,   # NUL
         2,
-        qr/2 bytes, need 1/
+        qr/overlong/
     ],
     [ "overlong malformation, highest 2-byte",
         (isASCII) ? "\xc1\xbf" : I8_to_native("\xc4\xbf"),
@@ -998,7 +998,7 @@ my @malformations = (
         $UTF8_ALLOW_LONG,
         (isASCII) ? 0x7F : utf8::unicode_to_native(0xBF),
         2,
-        qr/2 bytes, need 1/
+        qr/overlong/
     ],
     [ "overlong malformation, lowest 3-byte",
         (isASCII) ? "\xe0\x80\x80" : I8_to_native("\xe0\xa0\xa0"),
@@ -1006,7 +1006,7 @@ my @malformations = (
         $UTF8_ALLOW_LONG,
         0,   # NUL
         3,
-        qr/3 bytes, need 1/
+        qr/overlong/
     ],
     [ "overlong malformation, highest 3-byte",
         (isASCII) ? "\xe0\x9f\xbf" : I8_to_native("\xe0\xbf\xbf"),
@@ -1014,7 +1014,7 @@ my @malformations = (
         $UTF8_ALLOW_LONG,
         (isASCII) ? 0x7FF : 0x3FF,
         3,
-        qr/3 bytes, need 2/
+        qr/overlong/
     ],
     [ "overlong malformation, lowest 4-byte",
         (isASCII) ? "\xf0\x80\x80\x80" : I8_to_native("\xf0\xa0\xa0\xa0"),
@@ -1022,7 +1022,7 @@ my @malformations = (
         $UTF8_ALLOW_LONG,
         0,   # NUL
         4,
-        qr/4 bytes, need 1/
+        qr/overlong/
     ],
     [ "overlong malformation, highest 4-byte",
         (isASCII) ? "\xf0\x8F\xbf\xbf" : I8_to_native("\xf0\xaf\xbf\xbf"),
@@ -1030,7 +1030,7 @@ my @malformations = (
         $UTF8_ALLOW_LONG,
         (isASCII) ? 0xFFFF : 0x3FFF,
         4,
-        qr/4 bytes, need 3/
+        qr/overlong/
     ],
     [ "overlong malformation, lowest 5-byte",
         (isASCII)
@@ -1040,7 +1040,7 @@ my @malformations = (
         $UTF8_ALLOW_LONG,
         0,   # NUL
         5,
-        qr/5 bytes, need 1/
+        qr/overlong/
     ],
     [ "overlong malformation, highest 5-byte",
         (isASCII)
@@ -1050,7 +1050,7 @@ my @malformations = (
         $UTF8_ALLOW_LONG,
         (isASCII) ? 0x1FFFFF : 0x3FFFF,
         5,
-        qr/5 bytes, need 4/
+        qr/overlong/
     ],
     [ "overlong malformation, lowest 6-byte",
         (isASCII)
@@ -1060,7 +1060,7 @@ my @malformations = (
         $UTF8_ALLOW_LONG,
         0,   # NUL
         6,
-        qr/6 bytes, need 1/
+        qr/overlong/
     ],
     [ "overlong malformation, highest 6-byte",
         (isASCII)
@@ -1070,7 +1070,7 @@ my @malformations = (
         $UTF8_ALLOW_LONG,
         (isASCII) ? 0x3FFFFFF : 0x3FFFFF,
         6,
-        qr/6 bytes, need 5/
+        qr/overlong/
     ],
     [ "overlong malformation, lowest 7-byte",
         (isASCII)
@@ -1080,7 +1080,7 @@ my @malformations = (
         $UTF8_ALLOW_LONG,
         0,   # NUL
         7,
-        qr/7 bytes, need 1/
+        qr/overlong/
     ],
     [ "overlong malformation, highest 7-byte",
         (isASCII)
@@ -1090,7 +1090,7 @@ my @malformations = (
         $UTF8_ALLOW_LONG,
         (isASCII) ? 0x7FFFFFFF : 0x3FFFFFF,
         7,
-        qr/7 bytes, need 6/
+        qr/overlong/
     ],
 );
 
@@ -1103,7 +1103,7 @@ if (isASCII && ! $is64bit) {    # 32-bit ASCII platform
             0,  # There is no way to allow this malformation
             $REPLACEMENT,
             7,
-            qr/overflow/
+            qr/overflows/
         ],
         [ "overflow malformation, can tell on first byte",
             "\xff\x80\x80\x80\x80\x80\x81\x80\x80\x80\x80\x80\x80",
@@ -1111,7 +1111,7 @@ if (isASCII && ! $is64bit) {    # 32-bit ASCII platform
             0,  # There is no way to allow this malformation
             $REPLACEMENT,
             13,
-            qr/overflow/
+            qr/overflows/
         ];
 }
 else {
@@ -1129,7 +1129,7 @@ else {
             $UTF8_ALLOW_LONG,
             0,   # NUL
             (isASCII) ? 13 : 14,
-            qr/1[34] bytes, need 1/,    # 1[34] to work on either ASCII or EBCDIC
+            qr/overlong/,
         ],
         [ "overlong malformation, highest max-byte",
             (isASCII)    # 2**36-1 on ASCII; 2**30-1 on EBCDIC
@@ -1139,7 +1139,7 @@ else {
             $UTF8_ALLOW_LONG,
             (isASCII) ? 0xFFFFFFFFF : 0x3FFFFFFF,
             (isASCII) ? 13 : 14,
-            qr/1[34] bytes, need 7/,
+            qr/overlong/,
         ];
 
     if (! $is64bit) {   # 32-bit EBCDIC
@@ -1150,7 +1150,7 @@ else {
             0,  # There is no way to allow this malformation
             $REPLACEMENT,
             14,
-            qr/overflow/
+            qr/overflows/
         ];
     }
     else {  # 64-bit
@@ -1163,7 +1163,7 @@ else {
                 0,  # There is no way to allow this malformation
                 $REPLACEMENT,
                 (isASCII) ? 13 : 14,
-                qr/overflow/
+                qr/overflows/
             ];
     }
 }
@@ -1636,7 +1636,7 @@ my @tests = (
         "$UTF8_DISALLOW_ABOVE_31_BIT",
         'utf8', 0,
         (! isASCII) ? 14 : ($is64bit) ? 13 : 7,
-        qr/overflow at byte .*, after start byte 0xf/
+        qr/overflows/
     ],
 );
 
